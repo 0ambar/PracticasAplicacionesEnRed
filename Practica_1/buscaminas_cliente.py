@@ -121,5 +121,5 @@ def iniciar_cliente(host, port):
 
 host = input("Ingresa la IP (del servidor): ")
 port = input("Ingresa el puerto (del servidor): ")
-iniciar_cliente(host, port)
+iniciar_cliente(host, int(port))
 print("\nCliente acabo")

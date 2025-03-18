@@ -132,5 +132,5 @@ def iniciar_server(host, port):
 
 host = input("Ingresa la IP (del servidor): ")
 port = input("Ingresa el puerto (del servidor): ")
-iniciar_server(host, port)
+iniciar_server(host, int(port))
 print("\nServer acabo")

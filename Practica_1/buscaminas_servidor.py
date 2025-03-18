@@ -4,14 +4,14 @@
     2: "Imprimir 'Casilla liberada'"
     3: "Imprimir 'Mina pisada'"
     4: "Imprimir 'Mina marcada'"
-    5: "Imprimir 'Ganó el juego'"
 
     # Comandos de juego 
-    6: Listo para recibir tiros
-    7: Mina pisada
-    8: Casilla ya liberada
-    9: Se libero casilla
-    10: Has ganado
+    S-5: Listo para recibir tiros y dificultad principiante
+    S-6: Listo para recibir tiros y dificultad avanzado
+    S-7: Mina pisada
+    S-8: Casilla ya liberada
+    S-9: Se libero casilla
+    S-10: Has ganado
     
 """
 import random 
@@ -55,15 +55,18 @@ def generar_tablero(dificultad):
 def realizar_tiro(tablero, columna, fila):
     if tablero[fila-1][columna-1] == "*":
         print("Mina pisada")
-        return "S-7"
+        minas = [(i+1, chr(j+65)) for i in range(len(tablero)) for j in range(len(tablero[i])) if tablero[i][j] == "*"]
+        minas_str = ",".join([f"{mina[1]}{mina[0]}" for mina in minas])
+        return "S-7", minas_str
     elif tablero[fila-1][columna-1] == "o":
+        imprimir_tablero(tablero)
         print(f"Casilla ya liberada ({columna},{fila})")
-        return "S-8"
+        return "S-8", ""
     else:
         tablero[fila-1][columna-1] = "o"
         imprimir_tablero(tablero)
         print(f"Casilla liberada ({columna},{fila})")
-        return "S-9"
+        return "S-9", ""
 
 def recibir_cliente(Client_conn, Client_add):
     cont = 0
@@ -77,29 +80,31 @@ def recibir_cliente(Client_conn, Client_add):
             if data == "C-1":
                 tablero, tam, num_minas = generar_tablero("1")
                 imprimir_tablero(tablero)
-                Client_conn.sendall(b"S-6") # Listo para recibir tiros
+                Client_conn.sendall(b"S-5") # Listo para recibir tiros y dificultad principiante
                 tiros_ganar = (tam * tam) - num_minas
             elif data == "C-2":
                 tablero, tam, num_minas = generar_tablero("2")
                 imprimir_tablero(tablero)
-                Client_conn.sendall(b"S-6") # Listo para recibir tiros
+                Client_conn.sendall(b"S-6") # Listo para recibir tiros y dificultad avanzado
                 tiros_ganar = (tam * tam) - num_minas
             else:
-                coordenadas = data# Lista con coordenadas
+                coordenadas = data # Coordenadas
                 columna = ord(coordenadas[0].upper()) - ord('A') + 1
                 fila = int(coordenadas[1])
                 print(f"Coordenadas de tiro: ({fila}, {columna})")
-                resultado_tiro = realizar_tiro(tablero, columna, fila)
+                resultado_tiro, minas_str = realizar_tiro(tablero, columna, fila)
             
+                if resultado_tiro == "S-9": # Liberar casilla
+                    cont += 1
+                if cont >= tiros_ganar: # Descubrio todas las libres y gana
+                    Client_conn.sendall("S-10".encode()) # Has ganado
+                    print("Usuario ha ganado el juego!")
+                    termina = True
+
                 Client_conn.sendall(resultado_tiro.encode())
                 if resultado_tiro == "S-7": # Mina pisada
+                    Client_conn.sendall(minas_str.encode())
                     termina = True
-                elif resultado_tiro == "S-9": # Liberar casilla
-                    cont += 1
-                    if cont >= tiros_ganar: # Libero todas las libres y gana
-                        termina = True
-                        print("Has ganado el juego!")
-                        Client_conn.sendall(b"S-10") # Has ganado
 
 def iniciar_server(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPServerSocket:

@@ -1,19 +1,18 @@
 """"
-    # Mensajes que debe mostar el cliente: 
-    1: "Imprimir 'Elige dificultad'"
-    2: "Imprimir 'Casilla liberada'"
-    3: "Imprimir 'Mina pisada'"
-    4: "Imprimir 'Mina marcada'"
+    # Comandos de juedo que manda el servidor
+    C-1: Usuario eligio dificultad principiante
+    C-2: Usuario eligio dificultad avanzado
+    C-3: Cliente pregunta por duracion de la partida
 
-    # Comandos de juego 
+    # Comandos de juego que manda el servidor
     S-5: Listo para recibir tiros y dificultad principiante
     S-6: Listo para recibir tiros y dificultad avanzado
     S-7: Mina pisada
     S-8: Casilla ya liberada
     S-9: Se libero casilla
     S-10: Has ganado
-    
 """
+
 import random 
 import socket
 import time 
@@ -30,7 +29,7 @@ def imprimir_tablero(tablero):
     for i in range(size):
         print(f"{i+1:2} " + " ".join(tablero[i]))
 
-#Función para elegir la dificultad del juego
+
 def generar_tablero(dificultad):
     size = 0
     if dificultad == "1":
@@ -52,6 +51,7 @@ def generar_tablero(dificultad):
             minas_colocadas += 1
     return tablero, size, minas_colocadas
 
+
 def realizar_tiro(tablero, columna, fila):
     if tablero[fila-1][columna-1] == "*":
         print("Mina pisada")
@@ -68,43 +68,55 @@ def realizar_tiro(tablero, columna, fila):
         print(f"Casilla liberada ({columna},{fila})")
         return "S-9", ""
 
+
 def recibir_cliente(Client_conn, Client_add):
     cont = 0
     termina = False
     
     with Client_conn:
         print(f"Jugador conectado desde {Client_add}")
+        data = Client_conn.recv(buffer_size).decode() # Funcion bloqueante
+        if data == "C-1":
+            tablero, tam, num_minas = generar_tablero("1")
+            imprimir_tablero(tablero)
+            Client_conn.sendall(b"S-5") # Listo para recibir tiros y dificultad principiante
+            tiros_ganar = (tam * tam) - num_minas
+        
+        if data == "C-2":
+            tablero, tam, num_minas = generar_tablero("2")
+            imprimir_tablero(tablero)
+            Client_conn.sendall(b"S-6") # Listo para recibir tiros y dificultad avanzado
+            tiros_ganar = (tam * tam) - num_minas
+        
+        tiempo_inicio = time.time()
         while not termina:
-            data = Client_conn.recv(buffer_size).decode() # Funcion bloqueante
+            coordenadas = Client_conn.recv(buffer_size).decode() # Funcion bloqueante
+            columna = ord(coordenadas[0].upper()) - ord('A') + 1
+            fila = int(coordenadas[1])
+            print(f"Coordenadas de tiro: ({fila}, {columna})")
+            resultado_tiro, minas_str = realizar_tiro(tablero, columna, fila)
+        
+            if resultado_tiro == "S-9": # Liberar casilla
+                cont += 1
+            if cont >= tiros_ganar: # Descubrio todas las libres y gana
+                Client_conn.sendall("S-10".encode()) # Cliente ha ganado
+                print("Usuario ha ganado el juego!")
+                termina = True
 
-            if data == "C-1":
-                tablero, tam, num_minas = generar_tablero("1")
-                imprimir_tablero(tablero)
-                Client_conn.sendall(b"S-5") # Listo para recibir tiros y dificultad principiante
-                tiros_ganar = (tam * tam) - num_minas
-            elif data == "C-2":
-                tablero, tam, num_minas = generar_tablero("2")
-                imprimir_tablero(tablero)
-                Client_conn.sendall(b"S-6") # Listo para recibir tiros y dificultad avanzado
-                tiros_ganar = (tam * tam) - num_minas
-            else:
-                coordenadas = data # Coordenadas
-                columna = ord(coordenadas[0].upper()) - ord('A') + 1
-                fila = int(coordenadas[1])
-                print(f"Coordenadas de tiro: ({fila}, {columna})")
-                resultado_tiro, minas_str = realizar_tiro(tablero, columna, fila)
-            
-                if resultado_tiro == "S-9": # Liberar casilla
-                    cont += 1
-                if cont >= tiros_ganar: # Descubrio todas las libres y gana
-                    Client_conn.sendall("S-10".encode()) # Has ganado
-                    print("Usuario ha ganado el juego!")
-                    termina = True
+            Client_conn.sendall(resultado_tiro.encode())
+            if resultado_tiro == "S-7": # Mina pisada. Cliente ha perdido 
+                Client_conn.sendall(minas_str.encode())
+                termina = True
+        
+        tiempo_final = time.time()
+        tiempo_jugado = (tiempo_final - tiempo_inicio)
+        tiempo_jugado = str(tiempo_jugado)
+        print("Duración del juego: ", tiempo_jugado)
 
-                Client_conn.sendall(resultado_tiro.encode())
-                if resultado_tiro == "S-7": # Mina pisada
-                    Client_conn.sendall(minas_str.encode())
-                    termina = True
+        comando_clien = Client_conn.recv(buffer_size).decode() # El cliente pregunta por el tiempo
+        if comando_clien == "C-3":
+            Client_conn.sendall(tiempo_jugado.encode())
+
 
 def iniciar_server(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPServerSocket:
@@ -117,9 +129,8 @@ def iniciar_server(host, port):
         print("Esperando al jugador")
         recibir_cliente(Client_conn, Client_add)
 
-# host = input("Ingresa la IP: ")
-# port = int(input("Ingresa el puerto: "))
-host = "localhost"
-port = 65432
+
+host = input("Ingresa la IP (del servidor): ")
+port = input("Ingresa el puerto (del servidor): ")
 iniciar_server(host, port)
-print("Server acabo")
+print("\nServer acabo")
